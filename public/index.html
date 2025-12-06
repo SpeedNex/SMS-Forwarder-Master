@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短信主控平台 (Master)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+    <div id="loginOverlay" class="login-overlay hidden">
+        <div class="login-card">
+            <h2><i class="fas fa-lock"></i> 登录主控平台</h2>
+            <div class="form-group">
+                <label class="form-label" for="loginUser">用户名</label>
+                <input id="loginUser" class="form-input" autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="loginPass">密码</label>
+                <input id="loginPass" class="form-input" type="password" autocomplete="current-password">
+            </div>
+            <button class="btn" id="loginBtn"><i class="fas fa-sign-in-alt"></i> 登录</button>
+            <p style="color:#94a3b8; margin-top:10px; font-size:0.9rem;">默认账号可通过环境变量 MASTER_ADMIN_USER / MASTER_ADMIN_PASSWORD 设置</p>
+        </div>
+    </div>
+
+    <div class="container hidden" id="appShell">
+        <div class="header">
+            <div class="title">
+                <i class="fas fa-server"></i>
+                <div>
+                    <h1>短信主控平台</h1>
+                    <div style="color:#a5f3fc; font-size:0.95rem;">集中控制多个 Agent，公网可部署，具备鉴权</div>
+                </div>
+            </div>
+            <div class="status-panel">
+                <div class="status-item">
+                    <div class="status-label">已登录用户</div>
+                    <div class="status-value" id="profileName">--</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">在线 / 总 Agent</div>
+                    <div class="status-value" id="agentCount">0 / 0</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">待派发任务</div>
+                    <div class="status-value" id="pendingTasks">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fas fa-sitemap"></i> Agent 管理
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn btn-secondary" id="newAgentBtn"><i class="fas fa-plus"></i> 新建 Agent</button>
+                    <button class="btn" id="refreshAgentsBtn"><i class="fas fa-sync-alt"></i> 刷新</button>
+                </div>
+            </div>
+            <div class="card-grid" id="agentGrid"></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <i class="fas fa-paper-plane"></i> 指定 Agent 发送短信
+                </div>
+                <div class="tag" id="sendStatusTag">选择 Agent 后可发送</div>
+            </div>
+            <div class="two-cols">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label" for="agentSelect">目标 Agent</label>
+                        <select id="agentSelect" class="form-select"></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="sendPhone">目标号码</label>
+                        <input id="sendPhone" class="form-input" placeholder="如 +8613xxxxxx 或 13xxxxxxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="sendText">短信内容</label>
+                        <textarea id="sendText" class="form-input form-textarea" placeholder="中文自动 UCS2 分条"></textarea>
+                    </div>
+                    <button class="btn btn-secondary" id="sendTaskBtn"><i class="fas fa-share"></i> 下发任务</button>
+                </div>
+                <div class="small-card">
+                    <h4><i class="fas fa-info-circle"></i> Agent 对接说明</h4>
+                    <p>每个 Agent 会获取一个 <strong>API Key</strong>，在家庭内网或 NAT 后运行的 Agent 只需主动向 Master 轮询即可接收待发送任务，并把收到的短信推送回 Master。</p>
+                    <p style="margin-top:6px;">调试时，可在 Agent 增加调用：<code>/api/agent/heartbeat</code>、<code>/api/agent/tasks</code>、<code>/api/agent/messages</code>，请求头携带 <code>X-Agent-Key</code>。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title"><i class="fas fa-inbox"></i> 汇总收件箱（最新 200 条）</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn" id="refreshMsgBtn"><i class="fas fa-sync-alt"></i> 刷新</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Agent</th>
+                            <th>端口</th>
+                            <th>号码</th>
+                            <th>时间</th>
+                            <th>内容</th>
+                            <th>入库时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="messageTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title"><i class="fas fa-tasks"></i> 下发任务状态</div>
+                <button class="btn" id="refreshTaskBtn"><i class="fas fa-sync-alt"></i> 刷新</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Agent</th>
+                            <th>号码</th>
+                            <th>内容</th>
+                            <th>状态</th>
+                            <th>创建</th>
+                            <th>派发</th>
+                            <th>完成</th>
+                            <th>结果</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taskTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title"><i class="fas fa-file-alt"></i> Master 日志</div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" id="toggleLogBtn"><i class="fas fa-eye"></i> 查看日志</button>
+                    <button class="btn btn-secondary" id="refreshLogBtn"><i class="fas fa-sync-alt"></i> 刷新</button>
+                </div>
+            </div>
+            <div id="logPanel">
+                <pre id="logContent">(暂无日志)</pre>
+            </div>
+        </div>
+
+        <div class="footer">
+            公网可部署的短信主控 | 聚合多个 Agent | 保持与 Agent UI 风格一致
+        </div>
+    </div>
+
+    <!-- 创建 Agent 弹窗 -->
+    <div id="agentModal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title"><i class="fas fa-plus-circle"></i> 新建 Agent</div>
+                <button class="close-btn" onclick="hideAgentModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="agentFormSection">
+                <div class="form-group">
+                    <label class="form-label" for="agentNameInput">名称</label>
+                    <input id="agentNameInput" class="form-input" placeholder="如 电信卡-1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="agentDescInput">描述</label>
+                    <input id="agentDescInput" class="form-input" placeholder="可选，方便区分位置/用途">
+                </div>
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button class="btn btn-secondary" onclick="submitNewAgent()"><i class="fas fa-save"></i> 创建</button>
+                </div>
+            </div>
+            <div id="agentResultSection" class="hidden">
+                <div class="form-group">
+                    <label class="form-label">Agent ID / 名称</label>
+                    <div class="copy-row">
+                        <div id="agentResultName" class="copyable"></div>
+                        <button class="btn btn-log" onclick="copyText('agentResultName')"><i class="fas fa-copy"></i> 复制</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <div class="copy-row">
+                        <div id="agentResultKey" class="copyable"></div>
+                        <button class="btn btn-log" onclick="copyText('agentResultKey')"><i class="fas fa-copy"></i> 复制</button>
+                    </div>
+                    <div class="accordion-note">请立即保存 API Key，用于 Agent 端配置。</div>
+                </div>
+                <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+                    <button class="btn" onclick="resetAgentModal()"><i class="fas fa-plus"></i> 继续创建</button>
+                    <button class="btn btn-secondary" onclick="hideAgentModal()"><i class="fas fa-check"></i> 完成</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/js/app.js"></script>
+</body>
+</html>

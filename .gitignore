@@ -1,0 +1,5 @@
+# Local secrets and runtime artifacts
+.env
+master.db
+master.log
+__pycache__/
