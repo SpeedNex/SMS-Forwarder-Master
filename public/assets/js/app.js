@@ -198,12 +198,34 @@ async function submitNewAgent() {
 
 function copyText(elementId) {
     const text = document.getElementById(elementId).textContent;
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        showNotification('已复制到剪贴板', 'success');
-    }).catch(() => {
-        showNotification('复制失败', 'error');
-    });
+    if (!text) {
+        showNotification('没有可复制的内容', 'error');
+        return;
+    }
+    const tryClipboard = async () => {
+        if (!navigator.clipboard || window.isSecureContext === false) {
+            throw new Error('clipboard not available');
+        }
+        await navigator.clipboard.writeText(text);
+    };
+    const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            showNotification('已复制到剪贴板', 'success');
+        } catch (e) {
+            showNotification('复制失败', 'error');
+        }
+        document.body.removeChild(ta);
+    };
+    tryClipboard()
+        .then(() => showNotification('已复制到剪贴板', 'success'))
+        .catch(fallback);
 }
 
 async function sendTask() {
